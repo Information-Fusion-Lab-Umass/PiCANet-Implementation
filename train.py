@@ -58,10 +58,12 @@ if __name__ == '__main__':
 
     if load is not None:
         state_dict = torch.load(load, map_location=args.cuda)
-
-        start_iter = int(load.split('epo_')[1].strip('step.ckpt')) + 1
-        start_epo = int(load.split('/')[3].split('epo')[0])
-        now = datetime.datetime.strptime(load.split('/')[2], '%m%d%H%M')
+        model_val = os.path.basename(load).strip('step.ckpt').split('epo_')
+        start_iter = int(model_val[1]) + 1
+        start_epo = int(model_val[0]) + 1
+        #start_iter = int(load.split('epo_')[1].strip('step.ckpt')) + 1
+        #start_epo = int(load.split('/')[3].split('epo')[0])
+        #now = datetime.datetime.strptime(load.split('/')[2], '%m%d%H%M')
 
         print("Loading Model from {}".format(load))
         print("Start_iter : {}".format(start_iter))
@@ -84,15 +86,15 @@ if __name__ == '__main__':
     dataloader = DataLoader(duts_dataset, batch_size, shuffle=True, num_workers=0)
     # Logger Setup
     os.makedirs(os.path.join('log', now.strftime('%m%d%H%M')), exist_ok=True)
-    weight_save_dir = os.path.join('models', 'state_dict', now.strftime('%m%d%H%M'))
+    weight_save_dir = os.path.join('/mnt/nfs/scratch1/dchakraborty/pica/models', 'state_dict', now.strftime('%m%d%H%M'))
     os.makedirs(os.path.join(weight_save_dir), exist_ok=True)
     writer = SummaryWriter(os.path.join('log', now.strftime('%m%d%H%M')))
     iterate = start_iter
-    for epo in range(start_epo, epoch):
+    for epo in range(start_epo, start_epo+epoch):
         print("\nEpoch : {}".format(epo))
         for i, batch in enumerate(tqdm(dataloader)):
-            if i > 10:
-                break
+            #if i > 10:
+                #break
             opt_dec.zero_grad()
             opt_en.zero_grad()
             img = batch['image'].to(device)
@@ -108,7 +110,7 @@ if __name__ == '__main__':
                     writer.add_image('{}'.format(masked.size()[2]), masked, global_step=iterate)
                 writer.add_image('GT', mask, iterate)
                 writer.add_image('Image', img, iterate)
-
+            """
             if iterate % 200 == 0:
                 if i != 0:
                     torch.save(model.state_dict(),
@@ -117,12 +119,17 @@ if __name__ == '__main__':
                 for file in weight_save_dir:
                     if '00' in file and '000' not in file:
                         os.remove(os.path.join(weight_save_dir, file))
-            if i + epo * len(dataloader) % decay_step == 0 and i != 0:
-                learning_rate *= lr_decay
-                opt_en = torch.optim.SGD(model.encoder.parameters(), lr=learning_rate, momentum=0.9,
-                                         weight_decay=0.0005)
-                opt_dec = torch.optim.SGD(model.decoder.parameters(), lr=learning_rate * 10, momentum=0.9,
-                                          weight_decay=0.0005)
+            """
             iterate += args.batch_size
             del loss
+            #if i + epo * len(dataloader) % decay_step == 0 and i != 0:
+        if epo!=start_epo and (epo-start_epo)%5==0:
+            learning_rate *= lr_decay
+            print('Learning rate decayed to %.5f' % (learning_rate))
+            opt_en = torch.optim.SGD(model.encoder.parameters(), lr=learning_rate, momentum=0.9,
+                                         weight_decay=0.0005)
+            opt_dec = torch.optim.SGD(model.decoder.parameters(), lr=learning_rate * 10, momentum=0.9,
+                                          weight_decay=0.0005)
+        torch.save(model.state_dict(), os.path.join(weight_save_dir, '{}epo_{}step.ckpt'.format(epo, iterate)))
         start_iter = 0
+
